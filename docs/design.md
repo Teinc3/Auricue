@@ -28,23 +28,32 @@ All data is stored locally and only accessable by the user.
 
 ## Process/Data Flow Diagram
 ```mermaid
-flowchart TD
-    EarPiece["Ear piece"]
-    App["Mobile App<br/>(UI)"]
-    Agent["Auricue Agent"]
-    DB[("DB<br/>Context Logs<br/>(Device Storage)")]
+flowchart LR
+    subgraph Runtime ["Runtime"]
+        direction TB
+        EarPiece["Ear piece"]
+        App["Mobile App<br/>(UI)"]
+        Controller["Auricue Controller"]
+        DB[("DB<br/>Context Logs<br/>(Device Storage)")]
 
-    subgraph ExternalAPI ["External API"]
-        STT["STT / Diarisation"]
-        Search["Google Search"]
+        EarPiece <-->|Bluetooth| Controller
+        App <-->|HTTP/WS| Controller
+        Controller <-->|R/W| DB
     end
 
-    EarPiece <-->|Bluetooth| Agent
-    App <-->|HTTP/WS| Agent
-    Agent <-->|Streaming| STT
-    Agent <-->|MCP| Search
-    Agent <-->|R/W| DB
+    subgraph ExternalAPI ["External API"]
+        direction TB
+        STT["STT / Diarisation"]
+        Agent["Auricue Agent"]
+        Search["Google Search"]
 
+        Agent <-->|MCP| Search
+    end
+
+    Controller <-->|Streaming| STT
+    Controller <-->|Streaming| Agent
+
+    style Runtime stroke-dasharray: 5 5
     style ExternalAPI stroke-dasharray: 5 5
 ```
 
