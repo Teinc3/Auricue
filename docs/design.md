@@ -27,7 +27,26 @@ All data is stored locally and only accessable by the user.
 - Localisation: Support only English/derivatives for MVP.
 
 ## Process/Data Flow Diagram
-TBD
+```mermaid
+flowchart TD
+    EarPiece["Ear piece"]
+    App["Mobile App<br/>(UI)"]
+    Agent["Auricue Agent"]
+    DB[("DB<br/>Context Logs<br/>(Device Storage)")]
+
+    subgraph ExternalAPI ["External API"]
+        STT["STT / Diarisation"]
+        Search["Google Search"]
+    end
+
+    EarPiece <-->|Bluetooth| Agent
+    App <-->|HTTP/WS| Agent
+    Agent <-->|Streaming| STT
+    Agent <-->|MCP| Search
+    Agent <-->|R/W| DB
+
+    style ExternalAPI stroke-dasharray: 5 5
+```
 
 ## Relational Mapping
 TBD
