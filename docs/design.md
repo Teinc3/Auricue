@@ -57,5 +57,43 @@ flowchart LR
     style ExternalAPI stroke-dasharray: 5 5
 ```
 
-## Relational Mapping
-TBD
+## Entity-Relational Mapping
+```mermaid
+erDiagram
+    Speaker ||--o{ Sentence : "1:N"
+    Session ||--o{ Sentence : "1:N"
+    Sentence ||--o{ LiveContext : "1:N"
+
+    Speaker {
+        INT id PK
+        TXT context
+    }
+
+    Session {
+        INT id PK
+        TXT context
+        TIMESTAMP start_time
+        TIMESTAMP end_time
+    }
+
+    Sentence {
+        INT id PK
+        INT session_id FK
+        INT speaker_id FK
+        INT sec_num "AUTOINCREMENT (on session)"
+        TXT transcript
+        FLOAT confidence_level
+        TIMESTAMP start_time
+        TIMESTAMP end_time
+    }
+
+    LiveContext {
+        INT id PK
+        INT sentence_id FK
+        TXT content
+        ENUM cue_type "FACT, CONTEXT, STRATEGY, other"
+        TXT source
+        TIMESTAMP created_at
+        BOOL surfaced
+    }
+```
