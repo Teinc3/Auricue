@@ -1,0 +1,1 @@
+# MOCK BT ADAPTER

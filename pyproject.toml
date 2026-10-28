@@ -1,0 +1,34 @@
+[project]
+name = "auricue"
+version = "0.0.0"
+description = "A conversational assistant providing conversational context in the form of real-time audio cues."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = ["deepgram-sdk", "google-genai", "sounddevice", "websockets"]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.9.0"
+]
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.lint]
+select=["E", "F", "I", "W", "UP", "D204", "COM819"]
+ignore=["F403", "F405"]
+
+[tool.ruff.lint.isort]
+lines-after-imports=2
+section-order=[
+    "future", "standard-library", "third-party",
+    "first-party", "local-folder"
+]
+no-lines-before = ["standard-library", "third-party", "local-folder"]
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+exclude=["**/*.py"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
