@@ -4,9 +4,12 @@ version = "0.0.0"
 description = "A conversational assistant providing conversational context in the form of real-time audio cues."
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["deepgram-sdk", "google-genai", "sounddevice", "websockets"]
+dependencies = [
+    "deepgram-sdk", "google-genai", "pydantic", "python-dotenv", "sounddevice",
+    "websockets"
+]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "ruff>=0.9.0"
 ]
