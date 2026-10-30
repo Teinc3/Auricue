@@ -1,6 +1,14 @@
+import array
 import asyncio
+import tempfile
+import wave
 from collections.abc import AsyncIterator
-from sounddevice import CallbackFlags, RawInputStream, RawOutputStream
+from sounddevice import (
+    CallbackFlags,
+    CoreAudioSettings,
+    RawInputStream,
+    RawOutputStream,
+)
 
 
 class BluetoothAdapter:
@@ -35,39 +43,49 @@ class BluetoothAdapter:
             while True:
                 yield await queue.get()
 
-    async def write_chunk(self, data: bytes) -> None:
+    async def write_chunk(
+        self, data: bytes, right: bool | None = None, vol: float = 1.0
+    ) -> None:
         """Send audio bytes back to the earpiece."""
+
+        if vol != 1.0:
+            samples = array.array("h", data)
+            data = array.array("h", (int(s * vol) for s in samples)).tobytes()
+
+        settings = (
+            None if right is None
+            else CoreAudioSettings(channel_map=[-1, 0] if right else [0, -1])
+        )
 
         def _play() -> None:
             with RawOutputStream(
                 device=self.device_out, samplerate=self.sample_rate,
-                channels=1, dtype="int16"
+                channels=1, dtype="int16", extra_settings=settings
             ) as s:
                 s.write(data)
 
         await asyncio.to_thread(_play)
 
+    async def speak(
+        self, text: str, right: bool | None = None, vol: float = 1.0
+    ) -> None:
+        """Synthesize text via macOS say and play on the output device."""
+
+        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+            proc = await asyncio.create_subprocess_exec(
+                "say", "-o", tmp.name,
+                f"--data-format=LEI16@{self.sample_rate}", text
+            )
+            await proc.wait()
+            with wave.open(tmp.name, "rb") as wf:
+                data = wf.readframes(wf.getnframes())
+        await self.write_chunk(data, right=right, vol=vol)
+
 
 if __name__ == "__main__":
-    import array
-    import math
-
-    async def beep(adapter: BluetoothAdapter, freq: float = 440.0) -> None:
-        """Play a 440 Hz test tone on the output device."""
-
-        n = int(adapter.sample_rate * 1)
-        amp = int(32767 * 0.05)
-        step = 2.0 * math.pi * freq / adapter.sample_rate
-        pcm = array.array(
-            "h", (int(amp * math.sin(i * step)) for i in range(n))
-        )
-        await adapter.write_chunk(pcm.tobytes())
-
     async def main() -> None:
         adapter = BluetoothAdapter(device_in=0, device_out=1)
-        print(f"Playing 440Hz test tone on device {adapter.device_out}...")
-        await beep(adapter)
-
+        await adapter.speak("I love skibidi toilet.")
     asyncio.run(main())
 
 
