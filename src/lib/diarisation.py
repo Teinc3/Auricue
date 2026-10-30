@@ -97,7 +97,7 @@ if __name__ == "__main__":
     from .bluetooth import BluetoothAdapter
 
     async def main() -> None:
-        bt = BluetoothAdapter(device=0)
+        bt = BluetoothAdapter(device_in=0, device_out=1)
         dg = DeepgramAdapter(sample_rate=bt.sample_rate)
         print("Streaming mic audio to Deepgram...")
         async for res in dg.transcribe_stream(bt.read_stream()):

@@ -1,16 +1,17 @@
 import asyncio
 from collections.abc import AsyncIterator
-from sounddevice import CallbackFlags, RawInputStream
+from sounddevice import CallbackFlags, RawInputStream, RawOutputStream
 
 
 class BluetoothAdapter:
     """Mock Bluetooth adapter with device microphone"""
 
     def __init__(
-        self, device: int | None = 1,
+        self, device_in: int | None = 0, device_out: int | None = 1,
         sample_rate: int = 16000, chunk_size: int = 1600
     ):
-        self.device = device
+        self.device_in = device_in
+        self.device_out = device_out
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
 
@@ -26,7 +27,7 @@ class BluetoothAdapter:
             loop.call_soon_threadsafe(queue.put_nowait, bytes(data))
 
         stream = RawInputStream(
-            device=self.device, samplerate=self.sample_rate,
+            device=self.device_in, samplerate=self.sample_rate,
             blocksize=self.chunk_size, channels=1, dtype="int16",
             callback=_callback
         )
@@ -37,30 +38,35 @@ class BluetoothAdapter:
     async def write_chunk(self, data: bytes) -> None:
         """Send audio bytes back to the earpiece."""
 
-        # Wire to sd.RawOutputStream when TTS is added
-        raise NotImplementedError(
-            "BluetoothAdapter.write_chunk is not implemented yet"
-        )
+        def _play() -> None:
+            with RawOutputStream(
+                device=self.device_out, samplerate=self.sample_rate,
+                channels=1, dtype="int16"
+            ) as s:
+                s.write(data)
+
+        await asyncio.to_thread(_play)
 
 
 if __name__ == "__main__":
     import array
     import math
 
-    def calculate_intensity(chunk: bytes) -> float:
-        """Calculate normalized RMS intensity of a 16-bit PCM chunk."""
+    async def beep(adapter: BluetoothAdapter, freq: float = 440.0) -> None:
+        """Play a 440 Hz test tone on the output device."""
 
-        if not chunk:
-            return 0.0
-        samples = array.array("h", chunk)
-        return math.sqrt(sum(s * s for s in samples) / len(samples)) / 32768.0
+        n = int(adapter.sample_rate * 1)
+        amp = int(32767 * 0.05)
+        step = 2.0 * math.pi * freq / adapter.sample_rate
+        pcm = array.array(
+            "h", (int(amp * math.sin(i * step)) for i in range(n))
+        )
+        await adapter.write_chunk(pcm.tobytes())
 
     async def main() -> None:
-        print("Starting BluetoothAdapter read stream on device 1...")
-        adapter = BluetoothAdapter(device=1)
-        async for chunk in adapter.read_stream():
-            intensity = calculate_intensity(chunk)
-            print(f"Chunk intensity: {intensity:.4f}")
+        adapter = BluetoothAdapter(device_in=0, device_out=1)
+        print(f"Playing 440Hz test tone on device {adapter.device_out}...")
+        await beep(adapter)
 
     asyncio.run(main())
 
