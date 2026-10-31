@@ -9,6 +9,15 @@ class CueType(StrEnum):
     CONTEXT = "CONTEXT"
     STRATEGY = "STRATEGY"
     OTHER = "OTHER"
+    NONE = "NONE"
+
+
+class CueSource(BaseModel):
+    """Grounding citation for an AgentCue."""
+
+    authority: str
+    uri: str
+    year: int | None = None
 
 
 class AgentCue(BaseModel):
@@ -16,7 +25,7 @@ class AgentCue(BaseModel):
 
     cue_type: CueType
     content: str
-    source: str | None = None
+    source: CueSource | None = None
 
 
-__all__ = ["AgentCue", "CueType"]
+__all__ = ["AgentCue", "CueSource", "CueType"]
