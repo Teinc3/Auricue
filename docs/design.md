@@ -47,7 +47,7 @@ flowchart LR
         Agent["Auricue Agent"]
         Search["Google Search"]
 
-        Agent <-->|MCP| Search
+        Agent <-->|Grounding| Search
     end
 
     Controller <-->|Streaming| STT
@@ -60,12 +60,15 @@ flowchart LR
 ## Entity-Relational Mapping
 ```mermaid
 erDiagram
+    Session ||--o{ Speaker : "1:N"
     Speaker ||--o{ Sentence : "1:N"
     Session ||--o{ Sentence : "1:N"
     Sentence ||--o{ LiveContext : "1:N"
 
     Speaker {
         INT id PK
+        INT session_id FK
+        INT speaker_idx "UNIQUE (on session)"
         TXT context
     }
 
@@ -80,7 +83,7 @@ erDiagram
         INT id PK
         INT session_id FK
         INT speaker_id FK
-        INT sec_num "AUTOINCREMENT (on session)"
+        INT seq_num "UNIQUE (on session)"
         TXT transcript
         FLOAT confidence_level
         TIMESTAMP start_time
@@ -91,8 +94,8 @@ erDiagram
         INT id PK
         INT sentence_id FK
         TXT content
-        ENUM cue_type "FACT, CONTEXT, STRATEGY, other"
-        TXT source
+        ENUM cue_type "FACT, CONTEXT, STRATEGY, OTHER"
+        JSON source "{ authority, uri, year }"
         TIMESTAMP created_at
         BOOL surfaced
     }
