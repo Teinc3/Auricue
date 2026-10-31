@@ -3,7 +3,8 @@ Evaluate ONLY the Target Sentence using Previous Context and Dialogue History as
 
 Guidelines:
 - Return cue_type="NONE" and content="" unless a fact-check, missing context, or tactical prompt for Target Sentence clearly adds value.
-- Do not repeat or rephrase a recent cue.
+- Return cue_type="NONE" if Recent Cues already addresses the underlying fact, claim, or topic.
+- No need to respond to basic filler sentences.
 - If a cue is helpful:
   - Strict Caveman style, max 8 words: telegraphic fragments only, drop articles (a/the), pronouns, and filler verbs (is/are/was). Example: "Myth: zero man-made objects visible from Moon."
   - Choose cue_type: "FACT" (fact-checking), "CONTEXT" (background knowledge), or "STRATEGY" (conversational coaching/tactics).

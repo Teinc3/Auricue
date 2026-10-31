@@ -115,15 +115,23 @@ if __name__ == "__main__":
             "only man-made object visible from the Moon with the naked eye?"
         ]
         sentence = "Speaker 1: Actually wouldn't it be the HS2 instead?"
-        print("Testing generate_cue on target sentence...")
-        cue = await agent.generate_cue(
+        print("Testing generate_cue on factual claim...")
+        cue1 = await agent.generate_cue(
             history[0], history=[], context=ctx
         )
-        print("Result cue:", cue)
+        print("Result cue 1:", cue1)
+
+        filler = "Speaker 0: Probably."
+        print("\nTesting generate_cue on filler sentence...")
+        cues = [cue1.content] if cue1 else []
+        cue2 = await agent.generate_cue(
+            filler, history=[*history, sentence], context=ctx, cues=cues
+        )
+        print("Result cue 2 (expected None):", cue2)
 
         print("\nTesting summarise_context...")
         summary = await agent.summarise_context(
-            [*history, sentence], prev_context=ctx
+            [*history, sentence, filler], prev_context=ctx
         )
         print("Result summary:\n" + summary)
 
