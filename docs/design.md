@@ -75,6 +75,9 @@ erDiagram
     Session {
         INT id PK
         TXT context
+        ENUM fact_weight "NONE, LOW, MEDIUM, HIGH"
+        ENUM context_weight "NONE, LOW, MEDIUM, HIGH"
+        ENUM strategy_weight "NONE, LOW, MEDIUM, HIGH"
         TIMESTAMP start_time
         TIMESTAMP end_time
     }

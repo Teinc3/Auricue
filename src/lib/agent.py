@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from ..models import AgentCue, ContextSummary, CueType
+from ..models import AgentCue, ContextSummary, CueType, CueWeight
 
 
 load_dotenv()
@@ -56,9 +56,10 @@ class GeminiAdapter:
     def _format_cue_prompt(
         cls, sentence: str, history: list[str] | None = None,
         context: str = "", cues: list[str] | None = None,
-        speakers: dict[int, str] | None = None
+        speakers: dict[int, str] | None = None,
+        weights: dict[CueType, CueWeight] | None = None
     ) -> str:
-        """Format context, speakers, history, target sentence, and cues."""
+        """Format context, history, target sentence, cues, and weights."""
 
         sections: list[str] = []
         if context.strip():
@@ -71,6 +72,11 @@ class GeminiAdapter:
         sections.append(f"# Target Sentence\n{sentence.strip()}")
         if cues:
             sections.append("# Recent Cues\n" + "\n".join(cues))
+        if weights:
+            wt_str = ", ".join(
+                f"{k.value}: {v.value}" for k, v in weights.items()
+            )
+            sections.append(f"# Cue Weights\n{wt_str}")
         return "\n\n".join(sections)
 
     @classmethod
@@ -93,12 +99,15 @@ class GeminiAdapter:
     async def generate_cue(
         self, sentence: str, history: list[str] | None = None,
         context: str = "", cues: list[str] | None = None,
-        speakers: dict[int, str] | None = None
+        speakers: dict[int, str] | None = None,
+        weights: dict[CueType, CueWeight] | None = None
     ) -> AgentCue | None:
         """Stream response from Gemini and return structured AgentCue."""
 
+        if weights and all(w == CueWeight.NONE for w in weights.values()):
+            return None
         prompt = self._format_cue_prompt(
-            sentence, history, context, cues, speakers
+            sentence, history, context, cues, speakers, weights
         )
         stream = await self.client.aio.models.generate_content_stream(
             model=self.model, contents=prompt, config=self.config
@@ -112,6 +121,8 @@ class GeminiAdapter:
             return None
         cue = AgentCue.model_validate_json(raw)
         if cue.cue_type == CueType.NONE or not cue.content.strip():
+            return None
+        if weights and weights.get(cue.cue_type) == CueWeight.NONE:
             return None
         return cue
 

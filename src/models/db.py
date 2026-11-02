@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from sqlalchemy import JSON, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
-from .agent import CueType
+from .agent import CueType, CueWeight
 
 
 class Session(SQLModel, table=True):
@@ -10,8 +10,21 @@ class Session(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     context: str = ""
+    fact_weight: CueWeight = Field(default=CueWeight.MEDIUM)
+    context_weight: CueWeight = Field(default=CueWeight.MEDIUM)
+    strategy_weight: CueWeight = Field(default=CueWeight.MEDIUM)
     start_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
     end_time: datetime | None = None
+
+    @property
+    def weights(self) -> dict[CueType, CueWeight]:
+        """Mapping of cue types to active session sensitivity weights."""
+
+        return {
+            CueType.FACT: self.fact_weight,
+            CueType.CONTEXT: self.context_weight,
+            CueType.STRATEGY: self.strategy_weight
+        }
 
 
 class Speaker(SQLModel, table=True):

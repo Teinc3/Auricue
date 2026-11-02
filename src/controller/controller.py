@@ -10,7 +10,15 @@ from ..lib import (
     DeepgramAdapter,
     GeminiAdapter,
 )
-from ..models import DeepgramResults, LiveContext, Sentence, Session, Speaker
+from ..models import (
+    CueType,
+    CueWeight,
+    DeepgramResults,
+    LiveContext,
+    Sentence,
+    Session,
+    Speaker,
+)
 
 
 class Controller:
@@ -26,13 +34,27 @@ class Controller:
         self.dg = DeepgramAdapter()
         self.agent = GeminiAdapter()
         self.db = DatabaseAdapter()
+        self.weights: dict[CueType, CueWeight] = {
+            CueType.FACT: CueWeight.MEDIUM,
+            CueType.CONTEXT: CueWeight.MEDIUM,
+            CueType.STRATEGY: CueWeight.MEDIUM
+        }
         self.start_new_session()
 
-    def start_new_session(self) -> None:
+    def start_new_session(
+        self, fact_weight: CueWeight | None = None,
+        context_weight: CueWeight | None = None,
+        strategy_weight: CueWeight | None = None
+    ) -> None:
         """Initialise fresh per-recording session and pipeline buffers."""
 
         self.dg.sample_rate = self.bt.sample_rate
-        self.session = Session()
+        fw = fact_weight or self.weights[CueType.FACT]
+        cw = context_weight or self.weights[CueType.CONTEXT]
+        sw = strategy_weight or self.weights[CueType.STRATEGY]
+        self.session = Session(
+            fact_weight=fw, context_weight=cw, strategy_weight=sw
+        )
         self.speakers: dict[int, Speaker] = {}
         self.window: list[str] = []
         self.recent_cues: deque[str] = deque(maxlen=self.CUE_HISTORY_MAX)
@@ -103,7 +125,7 @@ class Controller:
             cue = await self.agent.generate_cue(
                 "\n".join(lines), history=self.window[:-len(lines)],
                 context=self.session.context, cues=list(self.recent_cues),
-                speakers=spk_ctx
+                speakers=spk_ctx, weights=self.session.weights
             )
             if not cue:
                 continue

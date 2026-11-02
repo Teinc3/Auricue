@@ -12,6 +12,15 @@ class CueType(StrEnum):
     NONE = "NONE"
 
 
+class CueWeight(StrEnum):
+    """Per-session sensitivity weighting for each cue category."""
+
+    NONE = "NONE"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
 class CueSource(BaseModel):
     """Grounding citation for an AgentCue."""
 
@@ -44,5 +53,6 @@ class ContextSummary(BaseModel):
 
 
 __all__ = [
-    "AgentCue", "ContextSummary", "CueSource", "CueType", "SpeakerProfile"
+    "AgentCue", "ContextSummary", "CueSource", "CueType", "CueWeight",
+    "SpeakerProfile"
 ]
