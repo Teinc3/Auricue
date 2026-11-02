@@ -22,10 +22,16 @@ class Controller:
     CUE_COOLDOWN = 5.0
 
     def __init__(self) -> None:
-        self.bt = BluetoothAdapter(1, 2)
-        self.dg = DeepgramAdapter(sample_rate=self.bt.sample_rate)
+        self.bt = BluetoothAdapter()
+        self.dg = DeepgramAdapter()
         self.agent = GeminiAdapter()
         self.db = DatabaseAdapter()
+        self.start_new_session()
+
+    def start_new_session(self) -> None:
+        """Initialise fresh per-recording session and pipeline buffers."""
+
+        self.dg.sample_rate = self.bt.sample_rate
         self.session = Session()
         self.speakers: dict[int, Speaker] = {}
         self.window: list[str] = []
@@ -121,6 +127,7 @@ class Controller:
     async def run(self) -> None:
         """Run the non-blocking audio -> STT -> Gemini -> TTS pipeline."""
 
+        self.start_new_session()
         await self.db.init()
         await self.db.save(self.session)
         worker = asyncio.create_task(self._cue_worker())

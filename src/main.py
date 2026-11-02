@@ -5,6 +5,7 @@ from .controller import Controller
 
 async def main() -> None:
     controller = Controller()
+    controller.bt.select_devices()
     print("Auricue active...")
     await controller.run()
 

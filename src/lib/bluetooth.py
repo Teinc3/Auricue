@@ -8,6 +8,7 @@ from sounddevice import (
     CoreAudioSettings,
     RawInputStream,
     RawOutputStream,
+    query_devices,
 )
 
 
@@ -15,13 +16,20 @@ class BluetoothAdapter:
     """Mock Bluetooth adapter with device microphone"""
 
     def __init__(
-        self, device_in: int | None = 0, device_out: int | None = 1,
+        self, device_in: int | None = None, device_out: int | None = None,
         sample_rate: int = 16000, chunk_size: int = 1600
     ):
         self.device_in = device_in
         self.device_out = device_out
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
+
+    def select_devices(self) -> None:
+        """Prompt CLI user to select audio input and output devices."""
+
+        print(query_devices())
+        self.device_in = int(input("Select input device ID: ").strip())
+        self.device_out = int(input("Select output device ID: ").strip())
 
     async def read_stream(self) -> AsyncIterator[bytes]:
         """Read raw 16-bit mono PCM chunks from the host microphone."""
