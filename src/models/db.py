@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from sqlalchemy import JSON, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
@@ -10,7 +10,7 @@ class Session(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     context: str = ""
-    start_time: datetime = Field(default_factory=datetime.utcnow)
+    start_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
     end_time: datetime | None = None
 
 
@@ -50,7 +50,7 @@ class LiveContext(SQLModel, table=True):
     content: str
     cue_type: CueType
     source: dict | None = Field(default=None, sa_type=JSON)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     surfaced: bool = False
 
 

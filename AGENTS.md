@@ -14,4 +14,3 @@
 - Always do imports at the start of each file, you are not allowed to use lazy imports unless not doing so will lead to circular dependencies (a comment should be left explaining such case)
 - ALWAYS ADD __all__ exports at the end of the file, with the exception of the entry point (main.py) and ALL __init__.py files (which imports must be immediately reexported under the same name using the "as" syntax). If a particular module exports too many files, it is preferred to just do a start import in the __init__.py for batch reexport.
 - No need to run pytests if the current scope of the job is unrelated to the test contents.
-- Use `datetime.utcnow()` instead of `datetime.now(UTC)`

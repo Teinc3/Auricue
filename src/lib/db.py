@@ -29,5 +29,4 @@ class DatabaseAdapter:
         await self.engine.dispose()
 
 
-__all__ = ["DATA_DIR", "DEFAULT_DB_URL", "DatabaseAdapter"]
-
+__all__ = ["DatabaseAdapter"]
