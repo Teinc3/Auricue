@@ -49,6 +49,7 @@ class LiveContext(SQLModel, table=True):
     sentence_id: int = Field(foreign_key="sentence.id", index=True)
     content: str
     cue_type: CueType
+    important: bool = False
     source: dict | None = Field(default=None, sa_type=JSON)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     surfaced: bool = False

@@ -25,6 +25,7 @@ class AgentCue(BaseModel):
 
     cue_type: CueType
     content: str
+    important: bool = False
     source: CueSource | None = None
 
 

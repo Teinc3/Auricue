@@ -19,7 +19,7 @@ class DeepgramAdapter:
 
     def __init__(
         self, model: str = "nova-3", sample_rate: int = 16000,
-        channels: int = 1, endpointing: int = 300
+        channels: int = 1, endpointing: int = 600
     ) -> None:
         self.api_key = os.environ["DEEPGRAM_API_KEY"]
         self.model = model

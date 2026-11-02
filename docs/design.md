@@ -95,6 +95,7 @@ erDiagram
         INT sentence_id FK
         TXT content
         ENUM cue_type "FACT, CONTEXT, STRATEGY, OTHER"
+        BOOL important
         JSON source "{ authority, uri, year }"
         TIMESTAMP created_at
         BOOL surfaced

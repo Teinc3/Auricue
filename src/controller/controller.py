@@ -1,4 +1,5 @@
 import asyncio
+import time
 from collections import deque
 from datetime import UTC, datetime, timedelta
 from itertools import groupby
@@ -18,6 +19,7 @@ class Controller:
     WINDOW_MAX = 200
     COMPACT_CHUNK = 100
     CUE_HISTORY_MAX = 15
+    CUE_COOLDOWN = 5.0
 
     def __init__(self) -> None:
         self.bt = BluetoothAdapter(1, 2)
@@ -31,6 +33,7 @@ class Controller:
         self.cue_queue: asyncio.Queue[tuple[Sentence, str]] = asyncio.Queue()
         self._compact_task: asyncio.Task[None] | None = None
         self._seq = 0
+        self._last_cue = -self.CUE_COOLDOWN
 
     async def _get_speaker(self, speaker_idx: int) -> Speaker:
         """Return cached session Speaker or persist a new one."""
@@ -100,15 +103,20 @@ class Controller:
                 continue
             self.recent_cues.append(f"[{cue.cue_type}] {cue.content}")
             src = cue.source.model_dump() if cue.source else None
+            cooling = (time.monotonic() - self._last_cue) < self.CUE_COOLDOWN
+            surfaced = cue.important or not cooling
             live_ctx = LiveContext(
-                sentence_id=target_sent.id, content=cue.content,
-                cue_type=cue.cue_type, source=src
+                sentence_id=target_sent.id, cue_type=cue.cue_type, source=src,
+                content=cue.content, important=cue.important, surfaced=surfaced,
             )
             await self.db.save(live_ctx)
-            print(f"-> Cue [{cue.cue_type}] {cue.content} (source={src})")
+            if not surfaced:
+                print(f"~ Suppressed [{cue.cue_type}] {cue.content}")
+                continue
+            tag = "!" if cue.important else "="
+            print(f"{tag} Cue [{cue.cue_type}] {cue.content} (source={src})")
             await self.bt.speak(cue.content, right=True)
-            live_ctx.surfaced = True
-            await self.db.save(live_ctx)
+            self._last_cue = time.monotonic()
 
     async def run(self) -> None:
         """Run the non-blocking audio -> STT -> Gemini -> TTS pipeline."""
