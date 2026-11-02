@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from ..models import AgentCue, CueType
+from ..models import AgentCue, ContextSummary, CueType
 
 
 load_dotenv()
@@ -38,19 +38,34 @@ class GeminiAdapter:
             response_mime_type="application/json", response_schema=AgentCue
         )
         self.summary_config = types.GenerateContentConfig(
-            system_instruction=sum_text, thinking_config=thinking
+            system_instruction=sum_text, thinking_config=thinking,
+            response_mime_type="application/json",
+            response_schema=ContextSummary
         )
 
     @staticmethod
+    def _format_speakers(speakers: dict[int, str] | None) -> str:
+        """Format non-empty speaker profiles into a prompt block."""
+
+        if not speakers:
+            return ""
+        lines = [f"Speaker {k}: {v}" for k, v in speakers.items() if v.strip()]
+        return "# Speaker Profiles\n" + "\n".join(lines) if lines else ""
+
+    @classmethod
     def _format_cue_prompt(
-        sentence: str, history: list[str] | None = None, context: str = "",
-        cues: list[str] | None = None
+        cls, sentence: str, history: list[str] | None = None,
+        context: str = "", cues: list[str] | None = None,
+        speakers: dict[int, str] | None = None
     ) -> str:
-        """Format context, history, target sentence, and recent cues."""
+        """Format context, speakers, history, target sentence, and cues."""
 
         sections: list[str] = []
         if context.strip():
             sections.append(f"# Previous Context\n{context.strip()}")
+        spk_block = cls._format_speakers(speakers)
+        if spk_block:
+            sections.append(spk_block)
         if history:
             sections.append("# Dialogue History\n" + "\n".join(history))
         sections.append(f"# Target Sentence\n{sentence.strip()}")
@@ -58,26 +73,33 @@ class GeminiAdapter:
             sections.append("# Recent Cues\n" + "\n".join(cues))
         return "\n\n".join(sections)
 
-    @staticmethod
+    @classmethod
     def _format_summary_prompt(
-        dialogue: list[str], prev_context: str = ""
+        cls, dialogue: list[str], prev_context: str = "",
+        speakers: dict[int, str] | None = None
     ) -> str:
-        """Format previous context and dialogue lines for summarisation."""
+        """Format previous context, speakers, and dialogue for summary."""
 
         sections: list[str] = []
         if prev_context.strip():
             sections.append(f"# Previous Context\n{prev_context.strip()}")
+        spk_block = cls._format_speakers(speakers)
+        if spk_block:
+            sections.append(spk_block)
         if dialogue:
             sections.append("# New Dialogue\n" + "\n".join(dialogue))
         return "\n\n".join(sections)
 
     async def generate_cue(
         self, sentence: str, history: list[str] | None = None,
-        context: str = "", cues: list[str] | None = None
+        context: str = "", cues: list[str] | None = None,
+        speakers: dict[int, str] | None = None
     ) -> AgentCue | None:
         """Stream response from Gemini and return structured AgentCue."""
 
-        prompt = self._format_cue_prompt(sentence, history, context, cues)
+        prompt = self._format_cue_prompt(
+            sentence, history, context, cues, speakers
+        )
         stream = await self.client.aio.models.generate_content_stream(
             model=self.model, contents=prompt, config=self.config
         )
@@ -94,16 +116,18 @@ class GeminiAdapter:
         return cue
 
     async def summarise_context(
-        self, dialogue: list[str], prev_context: str = ""
-    ) -> str:
-        """Fold evicted dialogue lines into the rolling session summary."""
+        self, dialogue: list[str], prev_context: str = "",
+        speakers: dict[int, str] | None = None
+    ) -> ContextSummary:
+        """Fold evicted dialogue into rolling topic and speaker summaries."""
 
-        prompt = self._format_summary_prompt(dialogue, prev_context)
+        prompt = self._format_summary_prompt(dialogue, prev_context, speakers)
         resp = await self.client.aio.models.generate_content(
             model=self.model, contents=prompt, config=self.summary_config
         )
-        text = resp.text or ""
-        return text.strip() or prev_context
+        if not resp.text:
+            return ContextSummary(context=prev_context)
+        return ContextSummary.model_validate_json(resp.text)
 
 
 if __name__ == "__main__":
@@ -133,7 +157,7 @@ if __name__ == "__main__":
         summary = await agent.summarise_context(
             [*history, sentence, filler], prev_context=ctx
         )
-        print("Result summary:\n" + summary)
+        print("Result summary:", summary)
 
     asyncio.run(main())
 

@@ -28,4 +28,20 @@ class AgentCue(BaseModel):
     source: CueSource | None = None
 
 
-__all__ = ["AgentCue", "CueSource", "CueType"]
+class SpeakerProfile(BaseModel):
+    """Compacted profile context for a single diarised speaker."""
+
+    speaker_idx: int
+    context: str
+
+
+class ContextSummary(BaseModel):
+    """Compacted session topic context and per-speaker profiles."""
+
+    context: str
+    speakers: list[SpeakerProfile] = []
+
+
+__all__ = [
+    "AgentCue", "ContextSummary", "CueSource", "CueType", "SpeakerProfile"
+]
