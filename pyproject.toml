@@ -5,8 +5,17 @@ description = "A conversational assistant providing conversational context in th
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "aiosqlite", "deepgram-sdk", "google-genai", "pydantic", "python-dotenv",
-    "sounddevice", "sqlalchemy[asyncio]", "sqlmodel", "websockets"
+    "aiosqlite",
+    "deepgram-sdk",
+    "fastapi>=0.162.0",
+    "google-genai",
+    "pydantic",
+    "python-dotenv",
+    "sounddevice",
+    "sqlalchemy[asyncio]",
+    "sqlmodel",
+    "uvicorn>=0.54.0",
+    "websockets",
 ]
 
 [dependency-groups]

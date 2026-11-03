@@ -1,0 +1,598 @@
+openapi: 3.1.0
+info:
+  title: Auricue API
+  description: Local REST and streaming protocol for the Auricue conversational audio assistant.
+  version: 0.1.0
+
+paths:
+  /api/devices:
+    get:
+      summary: List audio devices
+      description: Returns available PortAudio host devices and the currently selected input and output IDs.
+      responses:
+        "200":
+          description: Audio device list and selection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DevicesResponse"
+
+    patch:
+      summary: Update audio devices
+      description: Set selected input and/or output device IDs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevicesUpdate"
+      responses:
+        "200":
+          description: Updated device selection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSelection"
+
+  /api/devices/{device_id}:
+    patch:
+      summary: Assign device role
+      description: Assign a specific PortAudio device ID as the input or output device.
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevicePatch"
+      responses:
+        "200":
+          description: Updated device selection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSelection"
+
+  /api/weights:
+    get:
+      summary: Get all weights
+      description: Returns active sensitivity weights for all cue types.
+      responses:
+        "200":
+          description: Current cue sensitivity weights
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/CueWeight"
+                example:
+                  FACT: MEDIUM
+                  CONTEXT: MEDIUM
+                  STRATEGY: MEDIUM
+
+  /api/weights/{cue_type}:
+    get:
+      summary: Get cue weight
+      description: Returns the sensitivity weight for a single cue category.
+      parameters:
+        - name: cue_type
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/CueType"
+      responses:
+        "200":
+          description: Weight for requested cue category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeightResponse"
+        "404":
+          description: Unknown cue type
+
+    patch:
+      summary: Update cue weight
+      description: Updates the sensitivity weight for a specific cue category.
+      parameters:
+        - name: cue_type
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/CueType"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WeightUpdate"
+      responses:
+        "200":
+          description: Updated cue sensitivity weight
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeightResponse"
+
+  /api/session:
+    post:
+      summary: Create session
+      description: Initialise and persist a new recording session.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionCreate"
+      responses:
+        "200":
+          description: Created session record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+    get:
+      summary: Get latest session
+      description: Retrieve the most recent conversation session.
+      responses:
+        "200":
+          description: Latest session record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: No session found
+
+  /api/sessions:
+    get:
+      summary: List sessions
+      description: List all persisted sessions ordered newest first.
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+
+  /api/session/{session_id}:
+    get:
+      summary: Get session by ID
+      description: Retrieve a specific session record.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Session not found
+
+    patch:
+      summary: Update session
+      description: Update session context, weights, or mark end time.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionPatch"
+      responses:
+        "200":
+          description: Updated session record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Session not found
+
+  /api/session/{session_id}/speakers:
+    get:
+      summary: List session speakers
+      description: Retrieve all diarised speaker profiles for a session.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of speaker profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Speaker"
+
+  /api/session/{session_id}/speaker/{speaker_idx}:
+    get:
+      summary: Get speaker profile
+      description: Retrieve a specific speaker profile in a session.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: speaker_idx
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Speaker profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Speaker"
+        "404":
+          description: Speaker not found
+
+  /api/session/{session_id}/sentences:
+    get:
+      summary: List session sentences
+      description: Chronological list of diarised transcript utterances.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of sentences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sentence"
+
+  /api/session/{session_id}/transcripts:
+    get:
+      summary: List session transcripts (alias)
+      description: Alias of /api/session/{session_id}/sentences.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of sentences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sentence"
+
+  /api/session/{session_id}/cues:
+    get:
+      summary: List session cues
+      description: List generated real-time contextual assistance cues for a session.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of cues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LiveContext"
+
+  /api/session/{session_id}/contexts:
+    get:
+      summary: List session contexts (alias)
+      description: Alias of /api/session/{session_id}/cues.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of cues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LiveContext"
+
+components:
+  schemas:
+    CueType:
+      type: string
+      enum:
+        - FACT
+        - CONTEXT
+        - STRATEGY
+        - OTHER
+        - NONE
+
+    CueWeight:
+      type: string
+      enum:
+        - NONE
+        - LOW
+        - MEDIUM
+        - HIGH
+
+    Device:
+      type: object
+      required:
+        - id
+        - name
+        - inputs
+        - outputs
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        inputs:
+          type: integer
+        outputs:
+          type: integer
+
+    DeviceSelection:
+      type: object
+      properties:
+        device_in:
+          type:
+            - integer
+            - "null"
+        device_out:
+          type:
+            - integer
+            - "null"
+
+    DevicesResponse:
+      type: object
+      required:
+        - devices
+        - selected
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+        selected:
+          $ref: "#/components/schemas/DeviceSelection"
+
+    DevicesUpdate:
+      type: object
+      properties:
+        device_in:
+          type:
+            - integer
+            - "null"
+        device_out:
+          type:
+            - integer
+            - "null"
+
+    DevicePatch:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum:
+            - in
+            - out
+
+    WeightResponse:
+      type: object
+      required:
+        - cue_type
+        - value
+      properties:
+        cue_type:
+          type: string
+        value:
+          $ref: "#/components/schemas/CueWeight"
+
+    WeightUpdate:
+      type: object
+      required:
+        - value
+      properties:
+        value:
+          $ref: "#/components/schemas/CueWeight"
+
+    Session:
+      type: object
+      required:
+        - id
+        - context
+        - fact_weight
+        - context_weight
+        - strategy_weight
+        - start_time
+      properties:
+        id:
+          type: integer
+        context:
+          type: string
+        fact_weight:
+          $ref: "#/components/schemas/CueWeight"
+        context_weight:
+          $ref: "#/components/schemas/CueWeight"
+        strategy_weight:
+          $ref: "#/components/schemas/CueWeight"
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type:
+            - string
+            - "null"
+          format: date-time
+
+    SessionCreate:
+      type: object
+      properties:
+        fact_weight:
+          $ref: "#/components/schemas/CueWeight"
+        context_weight:
+          $ref: "#/components/schemas/CueWeight"
+        strategy_weight:
+          $ref: "#/components/schemas/CueWeight"
+
+    SessionPatch:
+      type: object
+      properties:
+        context:
+          type:
+            - string
+            - "null"
+        end_session:
+          type:
+            - boolean
+            - "null"
+        fact_weight:
+          $ref: "#/components/schemas/CueWeight"
+        context_weight:
+          $ref: "#/components/schemas/CueWeight"
+        strategy_weight:
+          $ref: "#/components/schemas/CueWeight"
+
+    Speaker:
+      type: object
+      required:
+        - id
+        - session_id
+        - speaker_idx
+        - context
+      properties:
+        id:
+          type: integer
+        session_id:
+          type: integer
+        speaker_idx:
+          type: integer
+        context:
+          type: string
+
+    Sentence:
+      type: object
+      required:
+        - id
+        - session_id
+        - speaker_id
+        - seq_num
+        - transcript
+        - confidence_level
+        - diarisation_latency
+        - start_time
+        - end_time
+      properties:
+        id:
+          type: integer
+        session_id:
+          type: integer
+        speaker_id:
+          type: integer
+        seq_num:
+          type: integer
+        transcript:
+          type: string
+        confidence_level:
+          type: number
+          format: float
+        diarisation_latency:
+          type: integer
+          description: End-to-end STT latency in milliseconds.
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+
+    CueSource:
+      type: object
+      required:
+        - authority
+        - uri
+      properties:
+        authority:
+          type: string
+        uri:
+          type: string
+        year:
+          type:
+            - integer
+            - "null"
+
+    LiveContext:
+      type: object
+      required:
+        - id
+        - sentence_id
+        - content
+        - cue_type
+        - important
+        - agent_latency
+        - created_at
+        - surfaced
+      properties:
+        id:
+          type: integer
+        sentence_id:
+          type: integer
+        content:
+          type: string
+        cue_type:
+          $ref: "#/components/schemas/CueType"
+        important:
+          type: boolean
+        source:
+          anyOf:
+            - $ref: "#/components/schemas/CueSource"
+            - type: "null"
+        agent_latency:
+          type: integer
+          description: Gemini generation latency in milliseconds.
+        created_at:
+          type: string
+          format: date-time
+        surfaced:
+          type: boolean

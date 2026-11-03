@@ -108,3 +108,8 @@ erDiagram
         BOOL surfaced
     }
 ```
+
+## Internal Protocol
+
+### REST Endpoints
+REST endpoints and schemas are defined in [openapi.yml](openapi.yml).
