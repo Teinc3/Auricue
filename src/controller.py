@@ -26,8 +26,8 @@ from .models import (
 class Controller:
     """Orchestrates live audio streaming, DB persistence, and TTS cues."""
 
-    WINDOW_MAX = 200
-    COMPACT_CHUNK = 100
+    WINDOW_MAX = 100
+    COMPACT_CHUNK = 50
     CUE_HISTORY_MAX = 15
     CUE_COOLDOWN = 5.0
 
