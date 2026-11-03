@@ -12,6 +12,7 @@ const el = {
   speakersList: document.getElementById("speakers-list"),
   deviceIn: document.getElementById("device-in"),
   deviceOut: document.getElementById("device-out"),
+  primarySpeaker: document.getElementById("primary-speaker"),
   weightFact: document.getElementById("weight-fact"),
   weightContext: document.getElementById("weight-context"),
   weightStrategy: document.getElementById("weight-strategy"),
@@ -45,6 +46,7 @@ async function handleWsEvent(msg) {
     activeSessionId = msg.running && msg.session_id != null ? String(msg.session_id) : null;
     if (msg.running && activeSessionId) {
       await refreshSessions(activeSessionId);
+      loadSpeaker();
       if (!wasRunning) {
         el.feed.innerHTML = '<div id="empty-feed" class="empty-feed"><span>Listening for speech...</span></div>';
         el.emptyFeed = document.getElementById("empty-feed");
@@ -60,6 +62,8 @@ async function handleWsEvent(msg) {
     renderContext(msg.context, msg.speakers);
   } else if (msg.type === "weights") {
     syncWeights(msg.weights);
+  } else if (msg.type === "speaker") {
+    syncSpeaker(msg);
   }
 }
 
@@ -227,6 +231,21 @@ function syncWeights(w) {
   if (w.STRATEGY) el.weightStrategy.value = w.STRATEGY;
 }
 
+async function loadSpeaker() {
+  try {
+    syncSpeaker(await (await fetch("/api/speaker")).json());
+  } catch (e) {
+    console.error("Failed to load speaker", e);
+  }
+}
+
+function syncSpeaker({ speakerCount, primarySpeaker }) {
+  const n = Math.max(speakerCount, (primarySpeaker ?? -1) + 1);
+  el.primarySpeaker.innerHTML = '<option value="">None</option>' +
+    Array.from({ length: n }, (_, i) => `<option value="${i}">Speaker ${i}</option>`).join("");
+  el.primarySpeaker.value = primarySpeaker ?? "";
+}
+
 async function refreshSessions(selectId = null) {
   try {
     const res = await fetch("/api/sessions");
@@ -323,6 +342,17 @@ function bindEvents() {
     });
   });
 
+  el.primarySpeaker.addEventListener("change", () => {
+    const val = el.primarySpeaker.value;
+    fetch("/api/speaker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        primarySpeaker: val === "" ? null : parseInt(val, 10),
+      }),
+    });
+  });
+
   [el.weightFact, el.weightContext, el.weightStrategy].forEach(sel => {
     sel.addEventListener("change", () => {
       fetch(`/api/weights/${sel.dataset.type}`, {
@@ -350,5 +380,6 @@ function bindEvents() {
 bindEvents();
 loadDevices();
 loadWeights();
+loadSpeaker();
 refreshSessions();
 connectWs();

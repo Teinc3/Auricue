@@ -1,29 +1,34 @@
-# Design/Technical Specification
+# Technical Specification
 
 ## Scoping
 ### Problem Formulation
-Auricue's solution simultaneously tackles 3 out of the 5 tracks suggested in
-the problem statement:
+As an ambient, real-time conversational copilot, Auricue simultaneously
+  tackles 3 out of the 5 tracks suggested in the problem statement:
 
 - A. Accessibility: making voice tech more inclusive for differently-abled
     communities.
 - B. Productivity: streamlining workflows with Voice AI automation
 - E. Real-Time Assistance: coaching, transcription, translation and more
 
+Auricue whispers ambient cues in an earpiece, keeping eyes focused and hands
+free, enabling augmented cognition without breaking the conversational flow.
+
 ### Stakeholders
-The end user engaged in a conversation and requiring contextual assistance.
-Has access to conversational data and simultaneously providing consent to
-operate on it.
-All data is stored locally and only accessable by the user.
+The end user engaged in a conversation and requiring contextual assistance:
+- Professionals in high-stakes, unscripted live discussions, interviews, debates
+  and live casting.
+- People that have difficulties conducting natural conversations, such as those
+  with extreme social anxiety.
 
 ### Scoping
 - Personal context and conversation transcripts stored locally under DB.
 - Real-time search engine/fact checker component for contextual cues.
-- Transcription, speaker diarisation and accuracy/fidelity API.
+- Agent to formulate strategy and provide conversation context.
+- Transcription, speaker diarisation API.
 - Mobile UI for viewing data/logs
 
 ### Constraints
-- Latency requirements, <2000 ms E2E is a must factor.
+- Latency requirements, <2000 ms E2E is a sweet factor.
 - Minimise bandwidth and unnecessary IO due to connection stability
 - Privacy/consent factor, must require user authorisation
 - Localisation: Support only English/derivatives for MVP.

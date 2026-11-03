@@ -119,6 +119,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/WeightResponse"
 
+  /api/speaker:
+    get:
+      summary: Get speaker information
+      description: Returns detected speaker count and the user's primary speaker index.
+      responses:
+        "200":
+          description: Current speaker count and primary speaker index
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpeakerInfo"
+
+    put:
+      summary: Set primary speaker
+      description: Set which diarised speaker index is the primary user (earpiece wearer).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpeakerUpdate"
+      responses:
+        "200":
+          description: Updated speaker count and primary speaker index
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpeakerInfo"
+        "422":
+          description: Validation error
+
   /api/session:
     post:
       summary: Create session
@@ -445,6 +476,7 @@ components:
         - fact_weight
         - context_weight
         - strategy_weight
+        - primary_speaker
         - start_time
       properties:
         id:
@@ -457,6 +489,11 @@ components:
           $ref: "#/components/schemas/CueWeight"
         strategy_weight:
           $ref: "#/components/schemas/CueWeight"
+        primary_speaker:
+          type:
+            - integer
+            - "null"
+          description: Diarised speaker index of the primary user (earpiece wearer), or null if none.
         start_time:
           type: string
           format: date-time
@@ -510,6 +547,33 @@ components:
           type: integer
         context:
           type: string
+
+    SpeakerUpdate:
+      type: object
+      properties:
+        primarySpeaker:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          description: Diarised speaker index of the primary user (earpiece wearer), or null if none.
+          example: 0
+
+    SpeakerInfo:
+      type: object
+      required:
+        - speakerCount
+      properties:
+        speakerCount:
+          type: integer
+          description: Total number of distinct diarised speakers detected in the active session.
+          example: 2
+        primarySpeaker:
+          type:
+            - integer
+            - "null"
+          description: Diarised speaker index of the primary user (earpiece wearer), or null if none.
+          example: 0
 
     Sentence:
       type: object

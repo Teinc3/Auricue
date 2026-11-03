@@ -3,7 +3,8 @@ A conversational assistant providing conversational context in the form of
 real-time audio cues.
 
 ## Setup
-1. Create and fill in the .env file with the appropriate API keys.
+1. Create and fill in the .env file with the appropriate API keys (there is a
+    .env.example file for reference)
 2. Create a virtual environment using `python3 -m venv .venv`
 3. Activate the environment using `.venv/bin/activate`
     (or `.\.venv\Scripts\Activate.ps1` on windows)

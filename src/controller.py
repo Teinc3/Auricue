@@ -42,6 +42,7 @@ class Controller:
             CueType.STRATEGY: CueWeight.MEDIUM
         }
         self.subscribers: set[asyncio.Queue[dict]] = set()
+        self.primary_speaker: int | None = None
         self._stop_event = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
         self._stream_t0 = 0.0
@@ -81,6 +82,22 @@ class Controller:
             weights={ k.value: v.value for k, v in self.weights.items() }
         )
 
+    def speaker_info(self) -> dict[str, int | None]:
+        """Return detected speaker count and the user's speaker index."""
+
+        return {
+            "speakerCount": len(self.speakers),
+            "primarySpeaker": self.primary_speaker
+        }
+
+    def set_primary_speaker(self, idx: int | None) -> dict[str, int | None]:
+        """Set the user's speaker index for this and later sessions."""
+
+        self.primary_speaker = self.session.primary_speaker = idx
+        info = self.speaker_info()
+        self.emit("speaker", **info)
+        return info
+
     def start_new_session(
         self, fact_weight: CueWeight | None = None,
         context_weight: CueWeight | None = None,
@@ -94,7 +111,8 @@ class Controller:
         cw = context_weight or self.weights[CueType.CONTEXT]
         sw = strategy_weight or self.weights[CueType.STRATEGY]
         self.session = Session(
-            fact_weight=fw, context_weight=cw, strategy_weight=sw
+            fact_weight=fw, context_weight=cw, strategy_weight=sw,
+            primary_speaker=self.primary_speaker
         )
         self.speakers: dict[int, Speaker] = {}
         self.window: list[str] = []
@@ -126,6 +144,7 @@ class Controller:
             )
             await self.db.save(spk)
             self.speakers[speaker_idx] = spk
+            self.emit("speaker", **self.speaker_info())
         return self.speakers[speaker_idx]
 
     async def _ingest_result(self, res: DeepgramResults) -> None:
@@ -200,7 +219,8 @@ class Controller:
             cue = await self.agent.generate_cue(
                 "\n".join(lines), history=self.window[:-len(lines)],
                 context=self.session.context, cues=list(self.recent_cues),
-                speakers=spk_ctx, weights=self.session.weights
+                speakers=spk_ctx, weights=self.session.weights,
+                primary_speaker=self.session.primary_speaker
             )
             agent_ms = int((time.monotonic() - t0) * 1000)
             if not cue:

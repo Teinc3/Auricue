@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Literal
 from fastapi import FastAPI, Request, WebSocket
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.datastructures import State
 
 from ..models.agent import CueType, CueWeight
@@ -20,6 +20,8 @@ class AppState(State):
     get_session_id: Callable[[], int | None]
     set_devices: Callable[..., None]
     set_weight: Callable[[CueType, CueWeight], None]
+    get_speaker: Callable[[], dict[str, int | None]]
+    set_primary_speaker: Callable[[int | None], dict[str, int | None]]
 
     def __init__(self) -> None:
         super().__init__()
@@ -31,6 +33,8 @@ class AppState(State):
         self.get_session_id = lambda: None
         self.set_devices = lambda _in=None, _out=None: None
         self.set_weight = lambda _t, _w: None
+        self.get_speaker = lambda: {}
+        self.set_primary_speaker = lambda _: {}
 
 
 class AuricueApp(FastAPI):
@@ -62,6 +66,10 @@ class WeightUpdate(BaseModel):
     value: CueWeight
 
 
+class SpeakerUpdate(BaseModel):
+    primarySpeaker: int | None = Field(default=None, ge=0)
+
+
 class SessionCreate(BaseModel):
     fact_weight: CueWeight | None = None
     context_weight: CueWeight | None = None
@@ -78,5 +86,6 @@ class SessionPatch(BaseModel):
 
 __all__ = [
     "AppRequest", "AppState", "AppWebSocket", "AuricueApp", "DevicePatch",
-    "DevicesUpdate", "SessionCreate", "SessionPatch", "WeightUpdate"
+    "DevicesUpdate", "SessionCreate", "SessionPatch", "SpeakerUpdate",
+    "WeightUpdate"
 ]

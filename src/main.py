@@ -19,6 +19,8 @@ def setup_app_state(controller: Controller) -> None:
     )
     app.state.set_devices = controller.set_devices
     app.state.set_weight = controller.set_weight
+    app.state.get_speaker = controller.speaker_info
+    app.state.set_primary_speaker = controller.set_primary_speaker
 
 
 async def main() -> None:

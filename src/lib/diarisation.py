@@ -6,7 +6,13 @@ from urllib.parse import urlencode
 import websockets
 from dotenv import load_dotenv
 
-from ..models import DeepgramError, DeepgramMessageAdapter, DeepgramResults
+from ..models import (
+    DeepgramError,
+    DeepgramMessage,
+    DeepgramMessageAdapter,
+    DeepgramResults,
+    DeepgramUtteranceEnd,
+)
 
 
 load_dotenv()
@@ -39,15 +45,16 @@ class DeepgramAdapter:
             "punctuate": "true",
             "smart_format": "true",
             "endpointing": str(self.endpointing),
+            "interim_results": "true",
+            "utterance_end_ms": "1000",
             "no_delay": "true"
         })
         return f"{self.DEEPGRAM_WS_URL}?{query}"
 
     @staticmethod
-    def _parse_results(raw: str | bytes) -> DeepgramResults | None:
-        """Validate a raw WebSocket frame and return finalized Results."""
+    def _parse_results(msg: DeepgramMessage) -> DeepgramResults | None:
+        """Return the message if it is a non-empty finalized Results frame."""
 
-        msg = DeepgramMessageAdapter.validate_json(raw)
         if isinstance(msg, DeepgramError):
             raise RuntimeError(f"{msg.variant}: {msg.description}")
         if not isinstance(msg, DeepgramResults) or not msg.is_final:
@@ -83,7 +90,12 @@ class DeepgramAdapter:
             sender = asyncio.create_task(self._pump_audio(audio_stream, ws))
             try:
                 async for message in ws:
-                    parsed = self._parse_results(message)
+                    msg = DeepgramMessageAdapter.validate_json(message)
+                    if isinstance(msg, DeepgramUtteranceEnd):
+                        # Flush words buffered past the silence gap
+                        await ws.send(json.dumps({ "type": "Finalize" }))
+                        continue
+                    parsed = self._parse_results(msg)
                     if parsed:
                         yield parsed
             finally:

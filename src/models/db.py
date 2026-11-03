@@ -13,6 +13,7 @@ class Session(SQLModel, table=True):
     fact_weight: CueWeight = Field(default=CueWeight.MEDIUM)
     context_weight: CueWeight = Field(default=CueWeight.MEDIUM)
     strategy_weight: CueWeight = Field(default=CueWeight.MEDIUM)
+    primary_speaker: int | None = None
     start_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
     end_time: datetime | None = None
 

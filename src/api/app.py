@@ -18,6 +18,7 @@ from .models import (
     DevicesUpdate,
     SessionCreate,
     SessionPatch,
+    SpeakerUpdate,
     WeightUpdate,
 )
 from .utils import db_adapter, devices, lifespan, weights
@@ -132,6 +133,22 @@ async def set_weight(
     weights[cue_type] = body.value
     req.app.state.set_weight(cue_type, body.value)
     return { "cue_type": cue_type.value, "value": body.value.value }
+
+
+@app.get("/api/speaker")
+async def get_speaker(req: AppRequest) -> dict[str, int | None]:
+    """Return detected speaker count and the user's speaker index."""
+
+    return req.app.state.get_speaker()
+
+
+@app.put("/api/speaker")
+async def put_speaker(
+    body: SpeakerUpdate, req: AppRequest
+) -> dict[str, int | None]:
+    """Set which diarised speaker is the user for the current session."""
+
+    return req.app.state.set_primary_speaker(body.primarySpeaker)
 
 
 @app.post("/api/session")

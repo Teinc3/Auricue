@@ -66,13 +66,18 @@ class GeminiAdapter:
         cls, sentence: str, history: list[str] | None = None,
         context: str = "", cues: list[str] | None = None,
         speakers: dict[int, str] | None = None,
-        weights: dict[CueType, CueWeight] | None = None
+        weights: dict[CueType, CueWeight] | None = None,
+        primary_speaker: int | None = None
     ) -> str:
         """Format context, history, target sentence, cues, and weights."""
 
         sections: list[str] = []
         if context.strip():
             sections.append(f"# Previous Context\n{context.strip()}")
+        if primary_speaker is not None:
+            sections.append(
+                f"# User\nSpeaker {primary_speaker} is the user (earpiece)."
+            )
         spk_block = cls._format_speakers(speakers)
         if spk_block:
             sections.append(spk_block)
@@ -111,14 +116,16 @@ class GeminiAdapter:
         self, sentence: str, history: list[str] | None = None,
         context: str = "", cues: list[str] | None = None,
         speakers: dict[int, str] | None = None,
-        weights: dict[CueType, CueWeight] | None = None
+        weights: dict[CueType, CueWeight] | None = None,
+        primary_speaker: int | None = None
     ) -> AgentCue | None:
         """Stream response from Gemini and return structured AgentCue."""
 
         if weights and all(w == CueWeight.NONE for w in weights.values()):
             return None
         prompt = self._format_cue_prompt(
-            sentence, history, context, cues, speakers, weights
+            sentence, history, context, cues, speakers, weights,
+            primary_speaker
         )
         stream = await self.client.aio.models.generate_content_stream(
             model=self.model, contents=prompt, config=self.config
