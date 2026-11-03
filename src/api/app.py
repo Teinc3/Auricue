@@ -1,6 +1,9 @@
 import asyncio
 from datetime import UTC, datetime
+from json import JSONDecodeError
+from pathlib import Path
 from fastapi import HTTPException, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 from sounddevice import query_devices
 from sqlmodel import select
 
@@ -44,7 +47,12 @@ async def session_ws(ws: AppWebSocket) -> None:
     sender = asyncio.create_task(_ws_sender(ws, q))
     try:
         while True:
-            msg = await ws.receive_json()
+            try:
+                msg = await ws.receive_json()
+            except (JSONDecodeError, ValueError):
+                continue
+            if not isinstance(msg, dict):
+                continue
             action = msg.get("action")
             if action == "start":
                 ws.app.state.start()
@@ -255,6 +263,10 @@ async def get_session_cues(session_id: int) -> list[LiveContext]:
         )
         res = await s.execute(stmt)
         return list(res.scalars().all())
+
+
+_static_dir = Path.cwd() / "src" / "static"
+app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
 
 
 __all__ = ["app"]

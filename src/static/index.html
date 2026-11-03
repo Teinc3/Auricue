@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Auricue</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-bar">
+      <div class="brand">
+        <span id="status-dot" class="dot"></span>
+        <span class="title">Auricue</span>
+      </div>
+      <div class="header-actions">
+        <select id="session-select" class="select-sm" aria-label="Select session">
+          <option value="live">Live Stream</option>
+        </select>
+        <button id="toggle-btn" class="btn btn-primary">Start</button>
+      </div>
+    </header>
+
+    <div class="drawers-container">
+      <details id="drawer-context" class="drawer">
+        <summary>Context / Summary</summary>
+        <div class="drawer-content">
+          <div class="section-label">Session Topic</div>
+          <p id="session-context" class="context-box">No session context recorded.</p>
+          <div class="section-label">Speakers</div>
+          <div id="speakers-list" class="speakers-chips">
+            <span class="empty-hint">No speaker profiles yet.</span>
+          </div>
+        </div>
+      </details>
+
+      <details id="drawer-settings" class="drawer">
+        <summary>Configuration</summary>
+        <div class="drawer-content">
+          <div class="form-row">
+            <label for="device-in">Mic (In)</label>
+            <select id="device-in" class="select-sm"></select>
+          </div>
+          <div class="form-row">
+            <label for="device-out">Speaker (Out)</label>
+            <select id="device-out" class="select-sm"></select>
+          </div>
+          <div class="section-label" style="margin-top: 8px;">Sensitivity Weights</div>
+          <div class="weights-grid">
+            <div class="weight-item">
+              <span>Fact</span>
+              <select id="weight-fact" data-type="FACT" class="select-sm">
+                <option value="NONE">NONE</option>
+                <option value="LOW">LOW</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HIGH">HIGH</option>
+              </select>
+            </div>
+            <div class="weight-item">
+              <span>Context</span>
+              <select id="weight-context" data-type="CONTEXT" class="select-sm">
+                <option value="NONE">NONE</option>
+                <option value="LOW">LOW</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HIGH">HIGH</option>
+              </select>
+            </div>
+            <div class="weight-item">
+              <span>Strategy</span>
+              <select id="weight-strategy" data-type="STRATEGY" class="select-sm">
+                <option value="NONE">NONE</option>
+                <option value="LOW">LOW</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HIGH">HIGH</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <main id="feed" class="feed" tabindex="0">
+      <div id="empty-feed" class="empty-feed">
+        <span>Press Start or select a session to view conversation feed.</span>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
+

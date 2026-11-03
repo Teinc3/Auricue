@@ -155,7 +155,7 @@ class Controller:
             self.window.append(line)
             self.cue_queue.put_nowait((sent, line, dg_ms))
             self.emit(
-                "sentence", seq_num=self._seq, speaker_idx=spk_idx,
+                "sentence", id=sent.id, seq_num=self._seq, speaker_idx=spk_idx,
                 transcript=text, confidence=alt.confidence,
                 diarisation_latency=dg_ms,
                 start_time=sent.start_time.isoformat(),
