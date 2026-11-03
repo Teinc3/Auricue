@@ -1,6 +1,8 @@
 let ws = null;
 let isRunning = false;
-let currentMode = "live";
+let isStopping = false;
+let activeSessionId = null;
+let currentMode = "new";
 
 const el = {
   dot: document.getElementById("status-dot"),
@@ -31,31 +33,63 @@ function connectWs() {
   };
 
   ws.onclose = () => {
-    updateStatus(false);
+    updateStatus(false, null);
     setTimeout(connectWs, 2000);
   };
 }
 
-function handleWsEvent(msg) {
+async function handleWsEvent(msg) {
   if (msg.type === "status") {
-    updateStatus(msg.running);
-    if (msg.running) refreshSessions();
-  } else if (msg.type === "sentence" && currentMode === "live") {
+    const wasRunning = isRunning;
+    isStopping = false;
+    activeSessionId = msg.running && msg.session_id != null ? String(msg.session_id) : null;
+    if (msg.running && activeSessionId) {
+      await refreshSessions(activeSessionId);
+      if (!wasRunning) {
+        el.feed.innerHTML = '<div id="empty-feed" class="empty-feed"><span>Listening for speech...</span></div>';
+        el.emptyFeed = document.getElementById("empty-feed");
+        renderContext("", []);
+      }
+    }
+    updateStatus(msg.running, activeSessionId);
+  } else if (msg.type === "sentence" && isLiveView()) {
     appendSentence(msg);
-  } else if (msg.type === "cue" && currentMode === "live") {
+  } else if (msg.type === "cue" && isLiveView()) {
     appendCue(msg);
-  } else if (msg.type === "context" && currentMode === "live") {
+  } else if (msg.type === "context" && isLiveView()) {
     renderContext(msg.context, msg.speakers);
   } else if (msg.type === "weights") {
     syncWeights(msg.weights);
   }
 }
 
-function updateStatus(running) {
+function isLiveView() {
+  return currentMode === "new" || (isRunning && currentMode === activeSessionId);
+}
+
+function updateStatus(running, sessionId) {
   isRunning = running;
+  activeSessionId = running && sessionId != null ? String(sessionId) : null;
   el.dot.classList.toggle("running", running);
-  el.btn.textContent = running ? "Stop" : "Start";
-  el.btn.className = running ? "btn btn-danger" : "btn btn-primary";
+  syncButtonState();
+}
+
+function syncButtonState() {
+  if (isStopping) {
+    el.btn.textContent = "Stopping...";
+    el.btn.className = "btn btn-danger";
+    el.btn.disabled = true;
+    return;
+  }
+  if (isRunning) {
+    el.btn.textContent = "Stop";
+    el.btn.className = "btn btn-danger";
+    el.btn.disabled = false;
+    return;
+  }
+  el.btn.textContent = "Start";
+  el.btn.className = "btn btn-primary";
+  el.btn.disabled = currentMode !== "new";
 }
 
 function renderSentenceNode(sent) {
@@ -63,12 +97,13 @@ function renderSentenceNode(sent) {
   div.className = "sentence-item";
   if (sent.id) div.dataset.sentenceId = sent.id;
 
-  const spkClass = sent.speaker_idx <= 3 ? `spk-${sent.speaker_idx}` : "spk-other";
+  const spkIdx = sent.speaker_idx ?? 0;
+  const spkClass = spkIdx <= 3 ? `spk-${spkIdx}` : "spk-other";
   const latency = sent.diarisation_latency != null ? `${sent.diarisation_latency}ms` : "";
 
   div.innerHTML = `
     <div class="sentence-header">
-      <span class="spk-badge ${spkClass}">S${sent.speaker_idx}</span>
+      <span class="spk-badge ${spkClass}">S${spkIdx}</span>
       <span class="meta-latency">${latency}</span>
     </div>
     <div class="transcript-text">${escapeHtml(sent.transcript)}</div>
@@ -82,7 +117,7 @@ function renderCueNode(cue) {
   div.className = `cue-card ${typeClass}${cue.surfaced ? "" : " suppressed"}`;
 
   const important = cue.important ? '<span class="important-flag">!</span>' : "";
-  const suppressed = cue.surfaced ? "" : '<span class="suppressed-badge">[cooldown]</span>';
+  const suppressed = cue.surfaced ? "" : '<span class="suppressed-badge">[suppressed]</span>';
   const latency = cue.agent_latency != null ? `Agent: ${cue.agent_latency}ms` : "";
 
   let sourceHtml = "";
@@ -136,10 +171,11 @@ function renderContext(ctxText, speakers) {
     return;
   }
   el.speakersList.innerHTML = speakers.map(s => {
-    const spkClass = s.speaker_idx <= 3 ? `spk-${s.speaker_idx}` : "spk-other";
+    const spkIdx = s.speaker_idx ?? 0;
+    const spkClass = spkIdx <= 3 ? `spk-${spkIdx}` : "spk-other";
     return `
       <div class="speaker-chip">
-        <span class="spk-badge ${spkClass}">S${s.speaker_idx}</span>
+        <span class="spk-badge ${spkClass}">S${spkIdx}</span>
         <span>${escapeHtml(s.context || "No context")}</span>
       </div>
     `;
@@ -191,17 +227,19 @@ function syncWeights(w) {
   if (w.STRATEGY) el.weightStrategy.value = w.STRATEGY;
 }
 
-async function refreshSessions() {
+async function refreshSessions(selectId = null) {
   try {
     const res = await fetch("/api/sessions");
     const sessions = await res.json();
-    const curr = el.sessionSelect.value;
-    el.sessionSelect.innerHTML = '<option value="live">Live Stream</option>' +
+    const targetVal = selectId != null ? String(selectId) : el.sessionSelect.value;
+    el.sessionSelect.innerHTML = '<option value="new">New Stream</option>' +
       sessions.map(s => {
         const time = s.start_time ? new Date(s.start_time).toLocaleTimeString() : "";
         return `<option value="${s.id}">Session #${s.id} (${time})</option>`;
       }).join("");
-    el.sessionSelect.value = curr;
+    el.sessionSelect.value = targetVal;
+    currentMode = el.sessionSelect.value || "new";
+    syncButtonState();
   } catch (e) {
     console.error("Failed to refresh sessions", e);
   }
@@ -225,8 +263,16 @@ async function loadSessionHistory(sessionId) {
       return;
     }
 
+    const spkMap = {};
+    for (const spk of spkRes) {
+      spkMap[spk.id] = spk.speaker_idx;
+    }
+
     const sentMap = {};
     for (const sent of sentRes) {
+      if (sent.speaker_idx == null) {
+        sent.speaker_idx = spkMap[sent.speaker_id] ?? 0;
+      }
       const node = renderSentenceNode(sent);
       sentMap[sent.id] = node;
       el.feed.appendChild(node);
@@ -251,8 +297,14 @@ async function loadSessionHistory(sessionId) {
 
 function bindEvents() {
   el.btn.addEventListener("click", () => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ action: isRunning ? "stop" : "start" }));
+    if (!ws || ws.readyState !== WebSocket.OPEN || el.btn.disabled) return;
+    if (isRunning) {
+      isStopping = true;
+      syncButtonState();
+      ws.send(JSON.stringify({ action: "stop" }));
+    } else if (currentMode === "new") {
+      ws.send(JSON.stringify({ action: "start" }));
+    }
   });
 
   el.deviceIn.addEventListener("change", () => {
@@ -283,8 +335,9 @@ function bindEvents() {
 
   el.sessionSelect.addEventListener("change", (e) => {
     currentMode = e.target.value;
-    if (currentMode === "live") {
-      el.feed.innerHTML = '<div id="empty-feed" class="empty-feed"><span>Live feed active. Waiting for audio...</span></div>';
+    syncButtonState();
+    if (currentMode === "new") {
+      el.feed.innerHTML = '<div id="empty-feed" class="empty-feed"><span>Press Start to begin a new stream.</span></div>';
       el.emptyFeed = document.getElementById("empty-feed");
       renderContext("", []);
     } else {
@@ -299,4 +352,3 @@ loadDevices();
 loadWeights();
 refreshSessions();
 connectWs();
-
