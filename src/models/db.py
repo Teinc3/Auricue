@@ -51,6 +51,7 @@ class Sentence(SQLModel, table=True):
     seq_num: int
     transcript: str
     confidence_level: float
+    diarisation_latency: int = 0
     start_time: datetime
     end_time: datetime
 
@@ -64,6 +65,7 @@ class LiveContext(SQLModel, table=True):
     cue_type: CueType
     important: bool = False
     source: dict | None = Field(default=None, sa_type=JSON)
+    agent_latency: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     surfaced: bool = False
 

@@ -1,16 +1,18 @@
 import asyncio
 import time
 from collections import deque
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from itertools import groupby
 
-from ..lib import (
+from .lib import (
     BluetoothAdapter,
     DatabaseAdapter,
     DeepgramAdapter,
     GeminiAdapter,
 )
-from ..models import (
+from .logger import close_session_log, logger, open_session_log
+from .models import (
     CueType,
     CueWeight,
     DeepgramResults,
@@ -39,6 +41,7 @@ class Controller:
             CueType.CONTEXT: CueWeight.MEDIUM,
             CueType.STRATEGY: CueWeight.MEDIUM
         }
+        self._stream_t0 = 0.0
         self.start_new_session()
 
     def start_new_session(
@@ -48,6 +51,7 @@ class Controller:
     ) -> None:
         """Initialise fresh per-recording session and pipeline buffers."""
 
+        close_session_log()
         self.dg.sample_rate = self.bt.sample_rate
         fw = fact_weight or self.weights[CueType.FACT]
         cw = context_weight or self.weights[CueType.CONTEXT]
@@ -58,10 +62,21 @@ class Controller:
         self.speakers: dict[int, Speaker] = {}
         self.window: list[str] = []
         self.recent_cues: deque[str] = deque(maxlen=self.CUE_HISTORY_MAX)
-        self.cue_queue: asyncio.Queue[tuple[Sentence, str]] = asyncio.Queue()
+        self.cue_queue: asyncio.Queue[
+            tuple[Sentence, str, int]
+        ] = asyncio.Queue()
         self._compact_task: asyncio.Task[None] | None = None
         self._seq = 0
         self._last_cue = -self.CUE_COOLDOWN
+        self._stream_t0 = 0.0
+
+    async def _timed_stream(self) -> AsyncIterator[bytes]:
+        """Wrap audio stream, anchoring stream_t0 upon first yielded chunk."""
+
+        self._stream_t0 = time.monotonic()
+        self.session.start_time = datetime.now(UTC)
+        async for chunk in self.bt.read_stream():
+            yield chunk
 
     async def _get_speaker(self, speaker_idx: int) -> Speaker:
         """Return cached session Speaker or persist a new one."""
@@ -77,6 +92,7 @@ class Controller:
     async def _ingest_result(self, res: DeepgramResults) -> None:
         """Split DeepgramResults by speaker, persist, and enqueue."""
 
+        now = time.monotonic()
         alt = res.channel.alternatives[0]
         base = self.session.start_time
         for spk_idx, grp in groupby(alt.words, key=lambda w: w.speaker):
@@ -84,26 +100,31 @@ class Controller:
             text = " ".join(w.punctuated_word or w.word for w in chunk).strip()
             spk = await self._get_speaker(spk_idx)
             self._seq += 1
+            word_end = chunk[-1].end
+            dg_ms = max(0, int((now - (self._stream_t0 + word_end)) * 1000))
             sent = Sentence(
                 session_id=self.session.id, speaker_id=spk.id,
                 seq_num=self._seq, transcript=text,
                 confidence_level=alt.confidence,
+                diarisation_latency=dg_ms,
                 start_time=base + timedelta(seconds=chunk[0].start),
-                end_time=base + timedelta(seconds=chunk[-1].end)
+                end_time=base + timedelta(seconds=word_end)
             )
             await self.db.save(sent)
             line = f"Speaker {spk_idx}: {text}"
-            print(line)
+            logger.info("[%dms] %s", dg_ms, line)
             self.window.append(line)
-            self.cue_queue.put_nowait((sent, line))
+            self.cue_queue.put_nowait((sent, line, dg_ms))
 
-    async def _compact_context(self) -> None:
+    async def _compact_context(self, flush: bool = False) -> None:
         """Summarise oldest COMPACT_CHUNK lines in background and update DB."""
 
-        batch = self.window[:self.COMPACT_CHUNK]
+        batch = self.window if flush else self.window[:self.COMPACT_CHUNK]
+        if not batch:
+            return
         spk_ctx = { k: v.context for k, v in self.speakers.items() }
         res = await self.agent.summarise_context(
-            batch, self.session.context, spk_ctx
+            batch, self.session.context, spk_ctx, weights=self.session.weights
         )
         self.session.context = res.context
         for p in res.speakers:
@@ -116,18 +137,21 @@ class Controller:
         """Coalesce queued sentences, query Gemini, and speak cues."""
 
         while True:
-            target_sent, first_line = await self.cue_queue.get()
+            target_sent, first_line, dg_ms = await self.cue_queue.get()
             lines = [first_line]
             while not self.cue_queue.empty():
-                target_sent, line = self.cue_queue.get_nowait()
+                target_sent, line, dg_ms = self.cue_queue.get_nowait()
                 lines.append(line)
             spk_ctx = { k: v.context for k, v in self.speakers.items() }
+            t0 = time.monotonic()
             cue = await self.agent.generate_cue(
                 "\n".join(lines), history=self.window[:-len(lines)],
                 context=self.session.context, cues=list(self.recent_cues),
                 speakers=spk_ctx, weights=self.session.weights
             )
+            agent_ms = int((time.monotonic() - t0) * 1000)
             if not cue:
+                logger.debug("[%dms | %dms] No cue", dg_ms, agent_ms)
                 continue
             self.recent_cues.append(f"[{cue.cue_type}] {cue.content}")
             src = cue.source.model_dump() if cue.source else None
@@ -135,16 +159,47 @@ class Controller:
             surfaced = cue.important or not cooling
             live_ctx = LiveContext(
                 sentence_id=target_sent.id, cue_type=cue.cue_type, source=src,
-                content=cue.content, important=cue.important, surfaced=surfaced,
+                agent_latency=agent_ms, content=cue.content,
+                important=cue.important, surfaced=surfaced
             )
             await self.db.save(live_ctx)
             if not surfaced:
-                print(f"~ Suppressed [{cue.cue_type}] {cue.content}")
+                logger.debug(
+                    "[%dms | %dms] ~ Suppressed [%s] %s",
+                    dg_ms, agent_ms, cue.cue_type, cue.content
+                )
                 continue
             tag = "!" if cue.important else "="
-            print(f"{tag} Cue [{cue.cue_type}] {cue.content} (source={src})")
+            logger.info(
+                "[%dms | %dms] %s Cue [%s] %s (source=%s)",
+                dg_ms, agent_ms, tag, cue.cue_type, cue.content, src
+            )
             await self.bt.speak(cue.content, right=True)
             self._last_cue = time.monotonic()
+
+    async def end_session(self) -> None:
+        """Finalise session: compact trailing dialogue and stamp end time."""
+
+        if self.session.end_time is not None:
+            return
+        if self._compact_task and not self._compact_task.done():
+            self._compact_task.cancel()
+            try:
+                await self._compact_task
+            except asyncio.CancelledError:
+                pass
+        self.session.end_time = datetime.now(UTC)
+        if self.window:
+            try:
+                await self._compact_context(flush=True)
+            except Exception as e:
+                logger.warning("Final context compaction failed: %s", e)
+        await self.db.save(self.session, *self.speakers.values())
+        logger.debug(
+            "Session %s ended. Context: %s", self.session.id,
+            self.session.context
+        )
+        close_session_log()
 
     async def run(self) -> None:
         """Run the non-blocking audio -> STT -> Gemini -> TTS pipeline."""
@@ -152,9 +207,10 @@ class Controller:
         self.start_new_session()
         await self.db.init()
         await self.db.save(self.session)
+        open_session_log(self.session.id)
         worker = asyncio.create_task(self._cue_worker())
         try:
-            async for res in self.dg.transcribe_stream(self.bt.read_stream()):
+            async for res in self.dg.transcribe_stream(self._timed_stream()):
                 await self._ingest_result(res)
                 idle = not self._compact_task or self._compact_task.done()
                 if len(self.window) >= self.WINDOW_MAX and idle:
@@ -163,10 +219,7 @@ class Controller:
                     )
         finally:
             worker.cancel()
-            if self._compact_task:
-                self._compact_task.cancel()
-            self.session.end_time = datetime.now(UTC)
-            await self.db.save(self.session)
+            await self.end_session()
             await self.db.close()
 
 

@@ -52,6 +52,15 @@ class GeminiAdapter:
         lines = [f"Speaker {k}: {v}" for k, v in speakers.items() if v.strip()]
         return "# Speaker Profiles\n" + "\n".join(lines) if lines else ""
 
+    @staticmethod
+    def _format_weights(weights: dict[CueType, CueWeight] | None) -> str:
+        """Format cue sensitivity weights block."""
+
+        if not weights:
+            return ""
+        items = [f"{k.value}: {v.value}" for k, v in weights.items()]
+        return f"# Cue Weights\n{', '.join(items)}"
+
     @classmethod
     def _format_cue_prompt(
         cls, sentence: str, history: list[str] | None = None,
@@ -72,19 +81,18 @@ class GeminiAdapter:
         sections.append(f"# Target Sentence\n{sentence.strip()}")
         if cues:
             sections.append("# Recent Cues\n" + "\n".join(cues))
-        if weights:
-            wt_str = ", ".join(
-                f"{k.value}: {v.value}" for k, v in weights.items()
-            )
-            sections.append(f"# Cue Weights\n{wt_str}")
+        wt_block = cls._format_weights(weights)
+        if wt_block:
+            sections.append(wt_block)
         return "\n\n".join(sections)
 
     @classmethod
     def _format_summary_prompt(
         cls, dialogue: list[str], prev_context: str = "",
-        speakers: dict[int, str] | None = None
+        speakers: dict[int, str] | None = None,
+        weights: dict[CueType, CueWeight] | None = None
     ) -> str:
-        """Format previous context, speakers, and dialogue for summary."""
+        """Format previous context, speakers, dialogue, and weights."""
 
         sections: list[str] = []
         if prev_context.strip():
@@ -94,6 +102,9 @@ class GeminiAdapter:
             sections.append(spk_block)
         if dialogue:
             sections.append("# New Dialogue\n" + "\n".join(dialogue))
+        wt_block = cls._format_weights(weights)
+        if wt_block:
+            sections.append(wt_block)
         return "\n\n".join(sections)
 
     async def generate_cue(
@@ -128,11 +139,14 @@ class GeminiAdapter:
 
     async def summarise_context(
         self, dialogue: list[str], prev_context: str = "",
-        speakers: dict[int, str] | None = None
+        speakers: dict[int, str] | None = None,
+        weights: dict[CueType, CueWeight] | None = None
     ) -> ContextSummary:
         """Fold evicted dialogue into rolling topic and speaker summaries."""
 
-        prompt = self._format_summary_prompt(dialogue, prev_context, speakers)
+        prompt = self._format_summary_prompt(
+            dialogue, prev_context, speakers, weights
+        )
         resp = await self.client.aio.models.generate_content(
             model=self.model, contents=prompt, config=self.summary_config
         )

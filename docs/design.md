@@ -89,6 +89,7 @@ erDiagram
         INT seq_num "UNIQUE (on session)"
         TXT transcript
         FLOAT confidence_level
+        INT diarisation_latency
         TIMESTAMP start_time
         TIMESTAMP end_time
     }
@@ -100,6 +101,7 @@ erDiagram
         ENUM cue_type "FACT, CONTEXT, STRATEGY, OTHER"
         BOOL important
         JSON source "{ authority, uri, year }"
+        INT agent_latency
         TIMESTAMP created_at
         BOOL surfaced
     }
