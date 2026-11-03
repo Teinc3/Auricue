@@ -1,13 +1,39 @@
 import asyncio
+import sys
+import uvicorn
 
+from .api.app import app
 from .controller import Controller
 
 
+def setup_app_state(controller: Controller) -> None:
+    """Wire controller callbacks into FastAPI app.state."""
+
+    app.state.start = controller.start
+    app.state.stop = controller.stop
+    app.state.subscribe = controller.subscribers.add
+    app.state.unsubscribe = controller.subscribers.discard
+    app.state.is_running = lambda: controller.is_running
+    app.state.get_session_id = lambda: (
+        controller.session.id if controller.session else None
+    )
+    app.state.set_devices = controller.set_devices
+    app.state.set_weight = controller.set_weight
+
+
 async def main() -> None:
+    """Bootstrap entry point for Auricue API server and Controller."""
+
     controller = Controller()
-    controller.bt.select_devices()
-    print("Auricue active...")
-    await controller.run()
+    if "--cli" in sys.argv:
+        controller.bt.select_devices()
+        print("Auricue active...")
+        await controller.run()
+        return
+    setup_app_state(controller)
+    config = uvicorn.Config(app, host="127.0.0.1", port=8000)
+    server = uvicorn.Server(config)
+    await server.serve()
 
 
 if __name__ == "__main__":

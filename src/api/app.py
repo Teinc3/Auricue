@@ -1,11 +1,16 @@
+import asyncio
 from datetime import UTC, datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import HTTPException, WebSocketDisconnect
 from sounddevice import query_devices
 from sqlmodel import select
 
 from ..models.agent import CueType
 from ..models.db import LiveContext, Sentence, Session, Speaker
 from .models import (
+    AppRequest,
+    AppState,
+    AppWebSocket,
+    AuricueApp,
     DevicePatch,
     DevicesUpdate,
     SessionCreate,
@@ -15,7 +20,41 @@ from .models import (
 from .utils import db_adapter, devices, lifespan, weights
 
 
-app = FastAPI(title="Auricue", lifespan=lifespan)
+app = AuricueApp(title="Auricue", lifespan=lifespan)
+app.state = AppState()
+
+
+async def _ws_sender(ws: AppWebSocket, q: asyncio.Queue[dict]) -> None:
+    while True:
+        await ws.send_json(await q.get())
+
+
+@app.websocket("/api/session")
+async def session_ws(ws: AppWebSocket) -> None:
+    """Bidirectional live session control and event stream."""
+
+    await ws.accept()
+    q: asyncio.Queue[dict] = asyncio.Queue()
+    ws.app.state.subscribe(q)
+    await ws.send_json({
+        "type": "status",
+        "running": ws.app.state.is_running(),
+        "session_id": ws.app.state.get_session_id()
+    })
+    sender = asyncio.create_task(_ws_sender(ws, q))
+    try:
+        while True:
+            msg = await ws.receive_json()
+            action = msg.get("action")
+            if action == "start":
+                ws.app.state.start()
+            elif action == "stop":
+                await ws.app.state.stop()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        sender.cancel()
+        ws.app.state.unsubscribe(q)
 
 
 @app.get("/api/devices")
@@ -34,22 +73,29 @@ async def get_devices() -> dict:
 
 
 @app.patch("/api/devices")
-async def update_devices(body: DevicesUpdate) -> dict:
+async def update_devices(body: DevicesUpdate, req: AppRequest) -> dict:
     """Update selected input and output audio device IDs."""
 
     if body.device_in is not None:
         devices["device_in"] = body.device_in
     if body.device_out is not None:
         devices["device_out"] = body.device_out
+    req.app.state.set_devices(body.device_in, body.device_out)
     return devices
 
 
 @app.patch("/api/devices/{device_id}")
-async def set_device_role(device_id: int, body: DevicePatch) -> dict:
+async def set_device_role(
+    device_id: int, body: DevicePatch, req: AppRequest
+) -> dict:
     """Assign device ID as current input or output."""
 
     key = "device_in" if body.role == "in" else "device_out"
     devices[key] = device_id
+    if body.role == "in":
+        req.app.state.set_devices(device_in=device_id)
+    else:
+        req.app.state.set_devices(device_out=device_id)
     return devices
 
 
@@ -70,10 +116,13 @@ async def get_weight(cue_type: CueType) -> dict[str, str]:
 
 
 @app.patch("/api/weights/{cue_type}")
-async def set_weight(cue_type: CueType, body: WeightUpdate) -> dict[str, str]:
+async def set_weight(
+    cue_type: CueType, body: WeightUpdate, req: AppRequest
+) -> dict[str, str]:
     """Update sensitivity weight for cue category."""
 
     weights[cue_type] = body.value
+    req.app.state.set_weight(cue_type, body.value)
     return { "cue_type": cue_type.value, "value": body.value.value }
 
 

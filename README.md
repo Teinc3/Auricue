@@ -7,9 +7,16 @@ real-time audio cues.
 2. Create a virtual environment using `python3 -m venv .venv`
 3. Activate the environment using `.venv/bin/activate`
     (or `.\.venv\Scripts\Activate.ps1` on windows)
-4. Execute in terminal to run the server:
+
+## Run
+To run the entire suite, including the UI, server and controller:
 ```py
 python3 -m src.main
+```
+
+To run only the controller via terminal:
+```py
+python3 -m src.main --cli
 ```
 
 ## Design/Technical Specification

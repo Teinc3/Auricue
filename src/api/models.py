@@ -1,7 +1,52 @@
+import asyncio
+from collections.abc import Awaitable, Callable
 from typing import Literal
+from fastapi import FastAPI, Request, WebSocket
 from pydantic import BaseModel
+from starlette.datastructures import State
 
-from ..models.agent import CueWeight
+from ..models.agent import CueType, CueWeight
+from .utils import async_noop
+
+
+class AppState(State):
+    """Typed application state for Controller lifecycle actions."""
+
+    start: Callable[[], None]
+    stop: Callable[[], Awaitable[None]]
+    subscribe: Callable[[asyncio.Queue[dict]], None]
+    unsubscribe: Callable[[asyncio.Queue[dict]], None]
+    is_running: Callable[[], bool]
+    get_session_id: Callable[[], int | None]
+    set_devices: Callable[..., None]
+    set_weight: Callable[[CueType, CueWeight], None]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.start = lambda: None
+        self.stop = async_noop
+        self.subscribe = lambda _: None
+        self.unsubscribe = lambda _: None
+        self.is_running = lambda: False
+        self.get_session_id = lambda: None
+        self.set_devices = lambda _in=None, _out=None: None
+        self.set_weight = lambda _t, _w: None
+
+
+class AuricueApp(FastAPI):
+    state: AppState
+
+
+class AppRequest(Request):
+    @property
+    def app(self) -> AuricueApp:
+        return self.scope["app"]  # type: ignore[return-value]
+
+
+class AppWebSocket(WebSocket):
+    @property
+    def app(self) -> AuricueApp:
+        return self.scope["app"]  # type: ignore[return-value]
 
 
 class DevicePatch(BaseModel):
@@ -32,7 +77,6 @@ class SessionPatch(BaseModel):
 
 
 __all__ = [
-    "DevicePatch", "DevicesUpdate", "SessionCreate", "SessionPatch",
-    "WeightUpdate"
+    "AppRequest", "AppState", "AppWebSocket", "AuricueApp", "DevicePatch",
+    "DevicesUpdate", "SessionCreate", "SessionPatch", "WeightUpdate"
 ]
-

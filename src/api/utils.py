@@ -15,6 +15,10 @@ weights: dict[CueType, CueWeight] = {
 }
 
 
+async def async_noop() -> None:
+    pass
+
+
 def default_devices() -> dict[str, int | None]:
     """Resolve default sounddevice input/output IDs."""
 
@@ -35,4 +39,7 @@ async def lifespan(_: FastAPI):
     await db_adapter.close()
 
 
-__all__ = ["db_adapter", "default_devices", "devices", "lifespan", "weights"]
+__all__ = [
+    "db_adapter", "default_devices", "devices", "lifespan", "weights",
+    "async_noop"
+]

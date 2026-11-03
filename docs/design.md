@@ -113,3 +113,62 @@ erDiagram
 
 ### REST Endpoints
 REST endpoints and schemas are defined in [openapi.yml](openapi.yml).
+
+### WebSockets
+- Endpoint: `WS /api/session`
+
+Bidirectional channel between UI and Controller for session orchestration and real-time streaming:
+
+#### Client -> Server Actions
+- `start`: Begin audio streaming and processing for a new session.
+  ```json
+  { "action": "start" }
+  ```
+- `stop`: Signal end of audio, flush final context summary, and close session.
+  ```json
+  { "action": "stop" }
+  ```
+
+#### Server -> Client Events
+- `status`: Pipeline status update.
+  ```json
+  { "type": "status", "running": true, "session_id": 1 }
+  ```
+- `sentence`: Live diarised transcript utterance with perceived STT latency.
+  ```json
+  {
+    "type": "sentence",
+    "seq_num": 1,
+    "speaker_idx": 0,
+    "transcript": "Did you know Henry?",
+    "confidence": 0.95,
+    "diarisation_latency": 410,
+    "start_time": "2026-11-03T01:00:00Z",
+    "end_time": "2026-11-03T01:00:02Z"
+  }
+  ```
+- `cue`: Generated real-time contextual assistance cue.
+  ```json
+  {
+    "type": "cue",
+    "sentence_id": 1,
+    "cue_type": "FACT",
+    "content": "Not visible from the Moon with the naked eye.",
+    "important": false,
+    "surfaced": true,
+    "source": { "authority": "NASA", "uri": "https://...", "year": 2005 },
+    "agent_latency": 580
+  }
+  ```
+- `context`: Rolling or final compacted session summary and speaker profiles.
+  ```json
+  {
+    "type": "context",
+    "context": "Discussion on misconceptions.",
+    "speakers": [{ "speaker_idx": 0, "context": "Challenged common myth." }]
+  }
+  ```
+- `weights`: Broadcast of active sensitivity weights.
+  ```json
+  { "type": "weights", "weights": { "FACT": "MEDIUM", "CONTEXT": "MEDIUM", "STRATEGY": "HIGH" } }
+  ```

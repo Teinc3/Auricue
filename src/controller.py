@@ -41,8 +41,45 @@ class Controller:
             CueType.CONTEXT: CueWeight.MEDIUM,
             CueType.STRATEGY: CueWeight.MEDIUM
         }
+        self.subscribers: set[asyncio.Queue[dict]] = set()
+        self._stop_event = asyncio.Event()
+        self._task: asyncio.Task[None] | None = None
         self._stream_t0 = 0.0
         self.start_new_session()
+
+    @property
+    def is_running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    def emit(self, event_type: str, **payload: object) -> None:
+        msg = { "type": event_type, **payload }
+        for q in self.subscribers:
+            q.put_nowait(msg)
+
+    def set_devices(
+        self, device_in: int | None = None, device_out: int | None = None
+    ) -> None:
+        """Update active input and/or output PortAudio device IDs."""
+
+        if device_in is not None:
+            self.bt.device_in = device_in
+        if device_out is not None:
+            self.bt.device_out = device_out
+
+    def set_weight(self, cue_type: CueType, weight: CueWeight) -> None:
+        """Update sensitivity weight for cue category."""
+
+        self.weights[cue_type] = weight
+        if cue_type == CueType.FACT:
+            self.session.fact_weight = weight
+        elif cue_type == CueType.CONTEXT:
+            self.session.context_weight = weight
+        elif cue_type == CueType.STRATEGY:
+            self.session.strategy_weight = weight
+        self.emit(
+            "weights",
+            weights={ k.value: v.value for k, v in self.weights.items() }
+        )
 
     def start_new_session(
         self, fact_weight: CueWeight | None = None,
@@ -76,6 +113,8 @@ class Controller:
         self._stream_t0 = time.monotonic()
         self.session.start_time = datetime.now(UTC)
         async for chunk in self.bt.read_stream():
+            if self._stop_event.is_set():
+                break
             yield chunk
 
     async def _get_speaker(self, speaker_idx: int) -> Speaker:
@@ -115,6 +154,13 @@ class Controller:
             logger.info("[%dms] %s", dg_ms, line)
             self.window.append(line)
             self.cue_queue.put_nowait((sent, line, dg_ms))
+            self.emit(
+                "sentence", seq_num=self._seq, speaker_idx=spk_idx,
+                transcript=text, confidence=alt.confidence,
+                diarisation_latency=dg_ms,
+                start_time=sent.start_time.isoformat(),
+                end_time=sent.end_time.isoformat()
+            )
 
     async def _compact_context(self, flush: bool = False) -> None:
         """Summarise oldest COMPACT_CHUNK lines in background and update DB."""
@@ -132,6 +178,13 @@ class Controller:
                 self.speakers[p.speaker_idx].context = p.context
         del self.window[:len(batch)]
         await self.db.save(self.session, *self.speakers.values())
+        self.emit(
+            "context", context=self.session.context,
+            speakers=[
+                { "speaker_idx": k, "context": v.context }
+                for k, v in self.speakers.items()
+            ]
+        )
 
     async def _cue_worker(self) -> None:
         """Coalesce queued sentences, query Gemini, and speak cues."""
@@ -163,6 +216,12 @@ class Controller:
                 important=cue.important, surfaced=surfaced
             )
             await self.db.save(live_ctx)
+            self.emit(
+                "cue", sentence_id=target_sent.id,
+                cue_type=cue.cue_type.value, content=cue.content,
+                important=cue.important, surfaced=surfaced, source=src,
+                agent_latency=agent_ms
+            )
             if not surfaced:
                 logger.debug(
                     "[%dms | %dms] ~ Suppressed [%s] %s",
@@ -201,13 +260,30 @@ class Controller:
         )
         close_session_log()
 
-    async def run(self) -> None:
-        """Run the non-blocking audio -> STT -> Gemini -> TTS pipeline."""
+    def start(self) -> None:
+        """Spawn live session pipeline in background task."""
+
+        if self.is_running:
+            return
+        self._stop_event.clear()
+        self._task = asyncio.create_task(self._run_session())
+
+    async def stop(self) -> None:
+        """Signal stop to audio stream and await final session flush."""
+
+        if not self.is_running or not self._task:
+            return
+        self._stop_event.set()
+        await self._task
+
+    async def _run_session(self) -> None:
+        """Execute one complete recording session pipeline."""
 
         self.start_new_session()
         await self.db.init()
         await self.db.save(self.session)
         open_session_log(self.session.id)
+        self.emit("status", running=True, session_id=self.session.id)
         worker = asyncio.create_task(self._cue_worker())
         try:
             async for res in self.dg.transcribe_stream(self._timed_stream()):
@@ -220,6 +296,14 @@ class Controller:
         finally:
             worker.cancel()
             await self.end_session()
+            self.emit("status", running=False, session_id=self.session.id)
+
+    async def run(self) -> None:
+        """Run the non-blocking e2e pipeline."""
+
+        try:
+            await self._run_session()
+        finally:
             await self.db.close()
 
 
