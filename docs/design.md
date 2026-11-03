@@ -12,6 +12,8 @@ the problem statement:
 
 ### Stakeholders
 The end user engaged in a conversation and requiring contextual assistance.
+Has access to conversational data and simultaneously providing consent to
+operate on it.
 All data is stored locally and only accessable by the user.
 
 ### Scoping
@@ -51,7 +53,7 @@ flowchart LR
     end
 
     Controller <-->|Streaming| STT
-    Controller <-->|Streaming| Agent
+    Controller <-->|HTTP| Agent
 
     style Runtime stroke-dasharray: 5 5
     style ExternalAPI stroke-dasharray: 5 5

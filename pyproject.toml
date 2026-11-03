@@ -1,6 +1,6 @@
 [project]
 name = "auricue"
-version = "0.0.0"
+version = "0.1.0"
 description = "A conversational assistant providing conversational context in the form of real-time audio cues."
 readme = "README.md"
 requires-python = ">=3.14"
